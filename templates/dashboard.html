@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Identity Threat Detection System</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; color: #333; }
+  h1 { color: #1a1a2e; }
+  .controls { margin: 20px 0; }
+  select, button { padding: 8px 14px; margin-right: 10px; font-size: 14px; cursor: pointer; }
+  button { background: #1a1a2e; color: white; border: none; border-radius: 4px; }
+  #status { color: green; font-size: 13px; }
+
+  .kpi-row { display: flex; gap: 16px; margin: 20px 0; flex-wrap: wrap; }
+  .kpi { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 16px 24px; text-align: center; min-width: 120px; }
+  .kpi .val { font-size: 2rem; font-weight: bold; }
+  .kpi .lbl { font-size: 12px; color: #888; margin-top: 4px; }
+  .CRITICAL { color: #c00000; }
+  .HIGH     { color: #ff4500; }
+  .MEDIUM   { color: #ffa500; }
+  .LOW      { color: #4caf50; }
+  .BLUE     { color: #1a1a2e; }
+
+  .charts-row { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
+  .chart-box { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 16px; flex: 1; min-width: 280px; }
+  .chart-box h3 { margin: 0 0 12px 0; font-size: 14px; color: #555; }
+  canvas { max-height: 200px; }
+
+  table { width: 100%; border-collapse: collapse; background: white; margin-top: 20px; }
+  th { background: #1a1a2e; color: white; padding: 10px 12px; text-align: left; font-size: 13px; }
+  td { padding: 10px 12px; border-bottom: 1px solid #eee; font-size: 13px; vertical-align: top; }
+  tr:hover { background: #f9f9f9; }
+
+  .badge { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: inline-block; }
+  .badge.CRITICAL { background: #fde8e8; color: #c00000; }
+  .badge.HIGH     { background: #fff0e6; color: #ff4500; }
+  .badge.MEDIUM   { background: #fff8e6; color: #ffa500; }
+  .badge.LOW      { background: #e8f5e9; color: #4caf50; }
+
+  .finding { background: #f9f9f9; border-left: 3px solid #ccc; padding: 6px 10px; margin-bottom: 6px; border-radius: 3px; }
+  .finding strong { font-size: 12px; text-transform: uppercase; }
+  .finding p { margin: 2px 0; font-size: 12px; color: #555; }
+  .mitre { display: inline-block; background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<h1>🛡️ Identity Threat Detection System</h1>
+
+<div class="controls">
+  <label>Data Source:</label>
+  <select id="source">
+    <option value="simulated">Simulated Logs</option>
+    <option value="cloudtrail">AWS CloudTrail</option>
+  </select>
+  <button onclick="runAnalysis()">Run Analysis</button>
+  <button onclick="downloadReport()">Download Report</button>
+  <span id="status"></span>
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-row">
+  <div class="kpi"><div class="val BLUE"  id="k-flagged">-</div><div class="lbl">Flagged Users</div></div>
+  <div class="kpi"><div class="val CRITICAL" id="k-critical">-</div><div class="lbl">Critical</div></div>
+  <div class="kpi"><div class="val HIGH"     id="k-high">-</div>    <div class="lbl">High</div></div>
+  <div class="kpi"><div class="val MEDIUM"   id="k-medium">-</div>  <div class="lbl">Medium</div></div>
+  <div class="kpi"><div class="val LOW"      id="k-low">-</div>     <div class="lbl">Low</div></div>
+  <div class="kpi"><div class="val BLUE"  id="k-logs">-</div>    <div class="lbl">Total Logs</div></div>
+  <div class="kpi"><div class="val BLUE"  id="k-alerts">-</div>  <div class="lbl">Total Alerts</div></div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+  <div class="chart-box"><h3>Risk Distribution</h3><canvas id="riskChart"></canvas></div>
+  <div class="chart-box"><h3>Detection Types</h3><canvas id="typeChart"></canvas></div>
+</div>
+
+<!-- Findings Table -->
+<h3>Flagged Identities</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Risk Level</th>
+      <th>Risk Score</th>
+      <th>Alerts</th>
+      <th>Findings</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<script>
+let riskChart = null, typeChart = null;
+
+async function runAnalysis() {
+  const source = document.getElementById("source").value;
+  document.getElementById("status").textContent = "Analyzing...";
+  document.getElementById("status").style.color = "orange";
+
+  const res = await fetch(`/api/analyze?source=${source}`);
+  const data = await res.json();
+
+  if (data.error) {
+    document.getElementById("status").textContent = "Error: " + data.error;
+    document.getElementById("status").style.color = "red";
+    return;
+  }
+
+  // KPI cards
+  const s = data.summary;
+  document.getElementById("k-flagged").textContent  = data.results.length;
+  document.getElementById("k-critical").textContent = s.CRITICAL;
+  document.getElementById("k-high").textContent     = s.HIGH;
+  document.getElementById("k-medium").textContent   = s.MEDIUM;
+  document.getElementById("k-low").textContent      = s.LOW;
+  document.getElementById("k-logs").textContent     = data.total_logs;
+  document.getElementById("k-alerts").textContent   = s.total_alerts;
+
+  // Risk chart
+  if (riskChart) riskChart.destroy();
+  riskChart = new Chart(document.getElementById("riskChart"), {
+    type: "doughnut",
+    data: {
+      labels: ["Critical", "High", "Medium", "Low"],
+      datasets: [{ data: [s.CRITICAL, s.HIGH, s.MEDIUM, s.LOW],
+        backgroundColor: ["#c00000", "#ff4500", "#ffa500", "#4caf50"] }]
+    }
+  });
+
+  // Detection type chart
+  const typeCounts = {};
+  data.results.forEach(u => u.findings.forEach(f => {
+    const t = f.type.replace(/_/g, " ");
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  }));
+  if (typeChart) typeChart.destroy();
+  typeChart = new Chart(document.getElementById("typeChart"), {
+    type: "bar",
+    data: {
+      labels: Object.keys(typeCounts),
+      datasets: [{ label: "Count", data: Object.values(typeCounts),
+        backgroundColor: ["#c00000", "#ff4500", "#ffa500", "#4caf50", "#1a73e8"] }]
+    },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  // Table
+  const tbody = document.getElementById("tbody");
+  if (!data.results.length) {
+    tbody.innerHTML = '<tr><td colspan="5">No threats detected.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.results.map(u => `
+    <tr>
+      <td><strong>${u.username}</strong></td>
+      <td><span class="badge ${u.risk_level}">${u.risk_level}</span></td>
+      <td>${u.risk_score}/100</td>
+      <td>${u.finding_count}</td>
+      <td>
+        ${u.findings.map(f => `
+          <div class="finding">
+            <strong>${f.type.replace(/_/g, " ")}</strong>
+            <p>${f.detail}</p>
+            <p>IP: ${f.ip} | Time: ${f.eventTime}</p>
+            <span class="mitre">${f.mitre.id} — ${f.mitre.name} — ${f.mitre.tactic}</span>
+          </div>`).join("")}
+      </td>
+    </tr>`).join("");
+
+  document.getElementById("status").textContent = "Done — " + data.results.length + " users flagged";
+  document.getElementById("status").style.color = "green";
+}
+
+function downloadReport() {
+  const source = document.getElementById("source").value;
+  window.location.href = `/api/report?source=${source}`;
+}
+
+window.onload = runAnalysis;
+</script>
+</body>
+</html>
