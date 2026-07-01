@@ -36,11 +36,7 @@ behavior looks like an attacker.
 - **Chart.js** — dashboard visualizations
 - **AWS EC2** — deployment ready
 
----
 
-## Project Structure
-
----
 
 ## Quick Start
 
@@ -58,8 +54,7 @@ python data/generate_logs.py
 # 4. Run
 python app.py
 
-# 5. Open browser
-http://localhost:5000
+
 ```
 
 ---
@@ -91,7 +86,7 @@ aws configure
 
 ---
 
-## Skills Demonstrated
+## Skills 
 
 - Behavioral threat detection logic
 - MITRE ATT&CK framework mapping
